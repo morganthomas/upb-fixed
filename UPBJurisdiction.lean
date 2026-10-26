@@ -421,6 +421,12 @@ structure World (Agent Resource Force : Type) where
   Guardian : Agent → Agent → Prop
   /-- UNDEFINED TERM. `Provides g c`: `g` is currently providing adequate care for `c`. -/
   Provides : Agent → Agent → Prop
+  /-- UNDEFINED TERM. `Contest x y`: `x` and `y` are currently engaged in a contest they
+      have both agreed to, such as a boxing match, a game or a sparring session. -/
+  Contest : Agent → Agent → Prop
+  /-- UNDEFINED TERM. `InScope x y a`: act `a` is within the scope of the contest `x` and
+      `y` agreed to. Agreeing to box is not agreeing to be stabbed. -/
+  InScope : Agent → Agent → Act Agent Resource Force → Prop
   /-- UNDEFINED TERM. `Proportionate f x y r`: force `f` is proportionate as a means of
       stopping `x`'s aggression against `y` over `r`. No definition is given; the theorems
       hold for every interpretation satisfying `proportionate_exists`. -/
@@ -506,6 +512,18 @@ def EntitledToEnforce (z v : Agent) (r : Resource) : Prop :=
 /-- Owner `o` has currently licensed `r` to someone else. -/
 def Licensed (o : Agent) (r : Resource) : Prop :=
   ∃ x, x ≠ o ∧ w.Permits o x r
+
+/-- AN AGREED CONTEST: acts `a₁` and `a₂` are moves in a contest their two doers have both
+    agreed to, both within its scope, and both doers currently have the capacity to
+    choose (consent requires capacity). -/
+def AgreedContest (a₁ a₂ : Act Agent Resource Force) : Prop :=
+  w.Contest a₁.doer a₂.doer ∧ w.hist.Capable w.now a₁.doer ∧ w.hist.Capable w.now a₂.doer ∧
+    w.InScope a₁.doer a₂.doer a₁ ∧ w.InScope a₁.doer a₂.doer a₂
+
+/-- If two people are not in an agreed contest, nothing they do is a move in one. -/
+theorem no_agreed_contest {a₁ a₂ : Act Agent Resource Force}
+    (h : ¬ w.Contest a₁.doer a₂.doer) : ¬ w.AgreedContest a₁ a₂ :=
+  fun hc => h hc.1
 
 /-- `x` is liable to force `f` from `z`: `x` is aggressing against someone whose claim
     `z` is entitled to enforce, and `f` is proportionate to stopping that aggression. -/
@@ -685,11 +703,13 @@ inductive InConflict {Agent Resource Force : Type} (w : World Agent Resource For
     may enforce it (P5a, P5b); no one else may (P5c). -/
 structure JurisdictionUPB {Agent Resource Force : Type}
     (N : NormSystem Agent Resource Force) (w : World Agent Resource Force) : Prop where
-  /-- P1 (Compossibility): two physically conflicting acts are never both permitted.
-      Equivalently (`compossible_iff_decisive`): in every physical conflict, at least one
-      party is obliged to yield. -/
+  /-- P1 (Compossibility): two physically conflicting acts are never both permitted, unless
+      they are moves in a contest both parties agreed to. Equivalently
+      (`compossible_iff_decisive`): in every physical conflict not agreed to, at least one
+      party is obliged to yield. Mutual combat, such as boxing, is therefore not forbidden
+      by P1; nor does any premise permit it. -/
   compossible : ∀ a₁ a₂ : Act Agent Resource Force,
-      InConflict w a₁ a₂ → ¬ (N.Perm a₁ ∧ N.Perm a₂)
+      InConflict w a₁ a₂ → ¬ w.AgreedContest a₁ a₂ → ¬ (N.Perm a₁ ∧ N.Perm a₂)
   /-- P3a: an owner may use what they own, unless they have currently licensed it to
       someone else. -/
   owner_use : ∀ (y : Agent) (r : Resource),
@@ -737,9 +757,9 @@ variable {Agent Resource Force : Type} {N : NormSystem Agent Resource Force}
     conflict. -/
 theorem premises_force_exclusivity (H : JurisdictionUPB N w) (x y : Agent) (r : Resource)
     (hx : w.HasJurisdiction x r) (hy : w.HasJurisdiction y r)
-    (hlx : ¬ w.Licensed x r) (hly : ¬ w.Licensed y r) : x = y :=
+    (hlx : ¬ w.Licensed x r) (hly : ¬ w.Licensed y r) (hnc : ¬ w.Contest x y) : x = y :=
   Classical.byContradiction fun hxy =>
-    H.compossible _ _ (InConflict.use_vs_use x y r hxy)
+    H.compossible _ _ (InConflict.use_vs_use x y r hxy) (w.no_agreed_contest hnc)
       ⟨H.owner_use x r hx hlx, H.owner_use y r hy hly⟩
 
 /-- Someone not currently aggressing against anyone is liable to no force at all. -/
@@ -747,12 +767,14 @@ theorem not_liable_of_peaceful {x : Agent} (hpeace : ∀ v r, ¬ w.Aggressing x 
     (z : Agent) (f : Force) : ¬ w.Liable x z f :=
   fun ⟨v, r, hag, _⟩ => hpeace v r hag
 
-/-- THEOREM 1 (Non-aggression): no one may take a resource from its owner who holds it. -/
+/-- THEOREM 1 (Non-aggression): no one may take a resource from its owner who holds it,
+    outside a contest they have both agreed to. (Throughout, the hypothesis `hnc` says the
+    two parties are not in an agreed contest, which is when P1 applies.) -/
 theorem no_take_from_owner (H : JurisdictionUPB N w) (x y : Agent) (r : Resource)
-    (hxy : x ≠ y) (hy : w.Holds y r) (hj : w.HasJurisdiction y r) :
+    (hxy : x ≠ y) (hy : w.Holds y r) (hj : w.HasJurisdiction y r) (hnc : ¬ w.Contest x y) :
     N.ObligRefrain (Act.Take x y r) :=
   (N.deontic_duality _).mpr fun h_take =>
-    H.compossible _ _ (InConflict.take_vs_defend x y r hxy hy)
+    H.compossible _ _ (InConflict.take_vs_defend x y r hxy hy) (w.no_agreed_contest hnc)
       ⟨h_take, H.owner_defend x y r hxy hj⟩
 
 /-- THEOREM 2 (Bodily non-aggression): no one may take control of another person's
@@ -760,9 +782,10 @@ theorem no_take_from_owner (H : JurisdictionUPB N w) (x y : Agent) (r : Resource
     aggressor is intervention with proportionate force, not taking control of them.
     Confinement is a case: the book's wife locked in the basement may resist her
     confinement, unlike a wife whose husband is merely unfaithful, who can simply leave. -/
-theorem bodily_non_aggression (H : JurisdictionUPB N w) (x y : Agent) (hxy : x ≠ y) :
+theorem bodily_non_aggression (H : JurisdictionUPB N w) (x y : Agent) (hxy : x ≠ y)
+    (hnc : ¬ w.Contest x y) :
     N.ObligRefrain (Act.Take x y (w.body y)) ∧ N.Perm (Act.Defend y x (w.body y)) :=
-  ⟨no_take_from_owner H x y _ hxy (w.holds_body y) (w.self_sovereignty y),
+  ⟨no_take_from_owner H x y _ hxy (w.holds_body y) (w.self_sovereignty y) hnc,
     H.owner_defend x y _ hxy (w.self_sovereignty y)⟩
 
 /-- THEOREM 2A (Peaceful people may resist any force): someone not aggressing may
@@ -775,85 +798,89 @@ theorem peaceful_may_resist (H : JurisdictionUPB N w) (x z : Agent) (f : Force)
 /-- THEOREM 3 (Property non-aggression): no one may take an owned resource from its
     owner who holds it, and the owner may use it (unless they have lent it out). -/
 theorem property_non_aggression (H : JurisdictionUPB N w) (x y : Agent) (r : Resource)
-    (hxy : x ≠ y) (hy : w.Holds y r) (hj : w.HasJurisdiction y r) (hl : ¬ w.Licensed y r) :
+    (hxy : x ≠ y) (hy : w.Holds y r) (hj : w.HasJurisdiction y r) (hl : ¬ w.Licensed y r)
+    (hnc : ¬ w.Contest x y) :
     N.ObligRefrain (Act.Take x y r) ∧ N.Perm (Act.Use y r) :=
-  ⟨no_take_from_owner H x y r hxy hy hj, H.owner_use y r hj hl⟩
+  ⟨no_take_from_owner H x y r hxy hy hj hnc, H.owner_use y r hj hl⟩
 
 /-- THEOREM 3F (No trespass): no one may use a thing they don't own without the owner's
     permission. If the owner has lent it to someone else, that person's use conflicts with
     the trespasser's; otherwise the owner's own use does. Either way P1 forbids the
     trespass. -/
 theorem no_trespass (H : JurisdictionUPB N w) (o x : Agent) (r : Resource)
-    (ho : w.HasJurisdiction o r) (hxo : x ≠ o) (hnp : ¬ w.Permits o x r) :
+    (ho : w.HasJurisdiction o r) (hxo : x ≠ o) (hnp : ¬ w.Permits o x r)
+    (hnc : ∀ v, ¬ w.Contest x v) :
     N.ObligRefrain (Act.Use x r) := by
   refine (N.deontic_duality _).mpr fun h_use => ?_
   by_cases hl : w.Licensed o r
   · obtain ⟨x', hx'o, hp⟩ := hl
     have hxx' : x ≠ x' := fun e => hnp (e ▸ hp)
-    exact H.compossible _ _ (InConflict.use_vs_use x x' r hxx')
+    exact H.compossible _ _ (InConflict.use_vs_use x x' r hxx') (w.no_agreed_contest (hnc x'))
       ⟨h_use, H.licensed_use o x' r ho hx'o hp⟩
-  · exact H.compossible _ _ (InConflict.use_vs_use x o r hxo)
+  · exact H.compossible _ _ (InConflict.use_vs_use x o r hxo) (w.no_agreed_contest (hnc o))
       ⟨h_use, H.owner_use o r ho hl⟩
 
 /-- THEOREM 3G (Licenses): someone the owner permits to use a thing may use it, and while
     the license lasts the owner yields: the owner's own use would conflict with it. -/
 theorem licensed_use_and_owner_yields (H : JurisdictionUPB N w) (o x : Agent) (r : Resource)
-    (ho : w.HasJurisdiction o r) (hxo : x ≠ o) (hp : w.Permits o x r) :
+    (ho : w.HasJurisdiction o r) (hxo : x ≠ o) (hp : w.Permits o x r)
+    (hnc : ¬ w.Contest x o) :
     N.Perm (Act.Use x r) ∧ N.ObligRefrain (Act.Use o r) := by
   have h_lic := H.licensed_use o x r ho hxo hp
   refine ⟨h_lic, (N.deontic_duality _).mpr fun h_own => ?_⟩
-  exact H.compossible _ _ (InConflict.use_vs_use x o r hxo) ⟨h_lic, h_own⟩
+  exact H.compossible _ _ (InConflict.use_vs_use x o r hxo) (w.no_agreed_contest hnc)
+    ⟨h_lic, h_own⟩
 
 /-- THEOREM 3A (The formerly unowned resource): if `y` holds `r` and no one other than
     `y` has title to it, no one may take `r` from `y`. Whatever is held is owned by
     someone, and that someone can only be `y`. No symmetry premise is needed. -/
 theorem no_take_from_sole_claimant (H : JurisdictionUPB N w) (x y : Agent) (r : Resource)
     (hxy : x ≠ y) (hy : w.Holds y r)
-    (h_sole : ∀ z, w.HasJurisdiction z r → z = y) :
+    (h_sole : ∀ z, w.HasJurisdiction z r → z = y) (hnc : ¬ w.Contest x y) :
     N.ObligRefrain (Act.Take x y r) := by
   obtain ⟨z, hj⟩ := w.someone_owns_held y r hy
   rw [h_sole z hj] at hj
-  exact no_take_from_owner H x y r hxy hy hj
+  exact no_take_from_owner H x y r hxy hy hj hnc
 
 /-- THEOREM 3B (Recovery by the owner): an owner may take back what they own from
     whoever holds it without permission, and the holder may neither keep using it nor
     resist. -/
 theorem recovery (H : JurisdictionUPB N w) (x y : Agent) (r : Resource)
     (hxy : x ≠ y) (hy : w.Holds y r) (hj : w.HasJurisdiction x r)
-    (hnp : ¬ w.Permits x y r) :
+    (hnp : ¬ w.Permits x y r) (hnc : ¬ w.Contest x y) :
     N.Perm (Act.Take x y r) ∧ N.ObligRefrain (Act.Use y r) ∧
       N.ObligRefrain (Act.Defend y x r) := by
   have h_take := H.enforce_recovery x y x r hxy hxy hj hnp (Or.inl rfl)
   refine ⟨h_take, (N.deontic_duality _).mpr ?_, (N.deontic_duality _).mpr ?_⟩
-  · exact fun h_use =>
-      H.compossible _ _ (InConflict.take_vs_use x y r hxy hy) ⟨h_take, h_use⟩
-  · exact fun h_def =>
-      H.compossible _ _ (InConflict.take_vs_defend x y r hxy hy) ⟨h_take, h_def⟩
+  · exact fun h_use => H.compossible _ _ (InConflict.take_vs_use x y r hxy hy)
+      (w.no_agreed_contest hnc) ⟨h_take, h_use⟩
+  · exact fun h_def => H.compossible _ _ (InConflict.take_vs_defend x y r hxy hy)
+      (w.no_agreed_contest hnc) ⟨h_take, h_def⟩
 
 /-- THEOREM 3C (Third-party recovery): unless the owner declines, anyone may take
     stolen property back from a holder who is not its owner and has no permission to
     use it, and the holder may neither keep using it nor resist. -/
 theorem third_party_recovery (H : JurisdictionUPB N w) (z y o : Agent) (r : Resource)
     (hzy : z ≠ y) (hoy : o ≠ y) (hy : w.Holds y r) (ho : w.HasJurisdiction o r)
-    (hnp : ¬ w.Permits o y r) (hnd : ¬ w.Declines o r) :
+    (hnp : ¬ w.Permits o y r) (hnd : ¬ w.Declines o r) (hnc : ¬ w.Contest z y) :
     N.Perm (Act.Take z y r) ∧ N.ObligRefrain (Act.Use y r) ∧
       N.ObligRefrain (Act.Defend y z r) := by
   have h_take := H.enforce_recovery z y o r hzy hoy ho hnp (Or.inr fun ⟨hd, _⟩ => hnd hd)
   refine ⟨h_take, (N.deontic_duality _).mpr ?_, (N.deontic_duality _).mpr ?_⟩
-  · exact fun h_use =>
-      H.compossible _ _ (InConflict.take_vs_use z y r hzy hy) ⟨h_take, h_use⟩
-  · exact fun h_def =>
-      H.compossible _ _ (InConflict.take_vs_defend z y r hzy hy) ⟨h_take, h_def⟩
+  · exact fun h_use => H.compossible _ _ (InConflict.take_vs_use z y r hzy hy)
+      (w.no_agreed_contest hnc) ⟨h_take, h_use⟩
+  · exact fun h_def => H.compossible _ _ (InConflict.take_vs_defend z y r hzy hy)
+      (w.no_agreed_contest hnc) ⟨h_take, h_def⟩
 
 /-- THEOREM 3D (A rescuer must return what they recover): once rescuer `z` holds the
     owner's property, the owner may take it back and `z` may neither keep using it
     nor resist. This is Theorem 3B applied to the rescuer. -/
 theorem rescuer_must_return (H : JurisdictionUPB N w) (o z : Agent) (r : Resource)
     (hoz : o ≠ z) (hz : w.Holds z r) (ho : w.HasJurisdiction o r)
-    (hnp : ¬ w.Permits o z r) :
+    (hnp : ¬ w.Permits o z r) (hnc : ¬ w.Contest o z) :
     N.Perm (Act.Take o z r) ∧ N.ObligRefrain (Act.Use z r) ∧
       N.ObligRefrain (Act.Defend z o r) :=
-  recovery H o z r hoz hz ho hnp
+  recovery H o z r hoz hz ho hnp hnc
 
 /-- THEOREM 3J (A borrower must return what they borrowed): once the owner's permission
     ends, the owner may take the thing back from the borrower, who may neither keep using
@@ -862,10 +889,10 @@ theorem rescuer_must_return (H : JurisdictionUPB N w) (o z : Agent) (r : Resourc
     it back in more or less the same state that it was when I borrowed it." -/
 theorem borrower_must_return (H : JurisdictionUPB N w) (o b : Agent) (r : Resource)
     (hob : o ≠ b) (hb : w.Holds b r) (ho : w.HasJurisdiction o r)
-    (hended : ¬ w.Permits o b r) :
+    (hended : ¬ w.Permits o b r) (hnc : ¬ w.Contest o b) :
     N.Perm (Act.Take o b r) ∧ N.ObligRefrain (Act.Use b r) ∧
       N.ObligRefrain (Act.Defend b o r) :=
-  recovery H o b r hob hb ho hended
+  recovery H o b r hob hb ho hended hnc
 
 /-- THEOREM 3K (Consensual bodily contact is not assault): someone who permits another to
     use their body, such as a patient consenting to surgery, makes that use permitted.
@@ -883,11 +910,11 @@ theorem fraud_or_duress_recovery (H : JurisdictionUPB N w) {t : Nat} (z x : Agen
     (r : Resource) (hnow : w.now = t + 1) (hz : w.hist.TitleAt t z r)
     (hg : w.hist.GaveAt t z x r) (hbad : w.hist.DeceivedAt t z x r ∨ w.hist.CoercedAt t z x r)
     (hno : ¬ w.hist.Owed t z r)
-    (hzx : z ≠ x) (hx : w.Holds x r) (hnp : ¬ w.Permits z x r) :
+    (hzx : z ≠ x) (hx : w.Holds x r) (hnp : ¬ w.Permits z x r) (hnc : ¬ w.Contest z x) :
     N.Perm (Act.Take z x r) ∧ N.ObligRefrain (Act.Use x r) ∧
       N.ObligRefrain (Act.Defend x z r) :=
   recovery H z x r hzx hx
-    (w.fraud_or_duress_victim_keeps_title hnow hz hg hbad hno hzx).1 hnp
+    (w.fraud_or_duress_victim_keeps_title hnow hz hg hbad hno hzx).1 hnp hnc
 
 /-- THEOREM 3I (Collecting a debt): if, at the previous step, `z` owed `x` a payment that was
     due, and some of `z`'s property was designated as payment, then `x` may take it from
@@ -898,10 +925,11 @@ theorem fraud_or_duress_recovery (H : JurisdictionUPB N w) {t : Nat} (z x : Agen
 theorem restitution_collection (H : JurisdictionUPB N w) {t : Nat} (z x : Agent)
     (r : Resource) (hnow : w.now = t + 1) (hz : w.hist.TitleAt t z r)
     (ha : w.hist.Alienable r) (hzx : z ≠ x) (hout : w.hist.Outstanding t z x)
-    (hc : w.hist.CompensatesAt t z x r) (hhold : w.Holds z r) (hnp : ¬ w.Permits x z r) :
+    (hc : w.hist.CompensatesAt t z x r) (hhold : w.Holds z r) (hnp : ¬ w.Permits x z r)
+    (hnc : ¬ w.Contest x z) :
     N.Perm (Act.Take x z r) ∧ N.ObligRefrain (Act.Use z r) ∧
       N.ObligRefrain (Act.Defend z x r) :=
-  recovery H x z r (Ne.symm hzx) hhold (w.restitution_owned hnow hz ha hzx hout hc).1 hnp
+  recovery H x z r (Ne.symm hzx) hhold (w.restitution_owned hnow hz ha hzx hout hc).1 hnp hnc
 
 /-- THEOREM 3E (The owner's veto over recovery): if the owner, while capable, declines,
     no one else may take the resource from anyone. -/
@@ -919,20 +947,22 @@ theorem vetoed_recovery (H : JurisdictionUPB N w) (z y o : Agent) (r : Resource)
     the owner voluntarily transferred it. -/
 theorem no_exemption (H : JurisdictionUPB N w) :
     ¬ ∃ (x y : Agent) (r : Resource), x ≠ y ∧ w.Holds y r ∧
-      w.HasJurisdiction y r ∧ N.Perm (Act.Take x y r) := by
-  intro ⟨x, y, r, hxy, hy, hj, h_take⟩
-  exact (N.deontic_duality _).mp (no_take_from_owner H x y r hxy hy hj) h_take
+      w.HasJurisdiction y r ∧ ¬ w.Contest x y ∧ N.Perm (Act.Take x y r) := by
+  intro ⟨x, y, r, hxy, hy, hj, hnc, h_take⟩
+  exact (N.deontic_duality _).mp (no_take_from_owner H x y r hxy hy hj hnc) h_take
 
 /-- THEOREM 6 (Proportionate defense of others): unless the victim declines, anyone may
     use proportionate force to stop an ongoing aggression, and the aggressor may not
     resist it. With `z = y` this is self-defense, which needs no one's permission. -/
 theorem defense_of_others (H : JurisdictionUPB N w) (z x y : Agent) (r : Resource)
     (f : Force) (hzx : z ≠ x) (hag : w.Aggressing x y r)
-    (hent : w.EntitledToEnforce z y r) (hprop : w.Proportionate f x y r) :
+    (hent : w.EntitledToEnforce z y r) (hprop : w.Proportionate f x y r)
+    (hnc : ¬ w.Contest z x) :
     N.Perm (Act.Intervene z x y r f) ∧ N.ObligRefrain (Act.Resist x z f) := by
   have h_int := H.enforce_defense z x y r f hzx hag hent hprop
   refine ⟨h_int, (N.deontic_duality _).mpr fun h_res => ?_⟩
-  exact H.compossible _ _ (InConflict.intervene_vs_resist z x y r f hzx) ⟨h_int, h_res⟩
+  exact H.compossible _ _ (InConflict.intervene_vs_resist z x y r f hzx)
+    (w.no_agreed_contest hnc) ⟨h_int, h_res⟩
 
 /-- THEOREM 6A (Defense is always available): whenever an aggression is under way,
     anyone entitled to stop it has some permitted way of doing so. -/
@@ -953,13 +983,14 @@ theorem defense_available (H : JurisdictionUPB N w) (z x y : Agent) (r : Resourc
 theorem excessive_force_forbidden (H : JurisdictionUPB N w) (z x y : Agent) (r : Resource)
     (f : Force) (hzx : z ≠ x)
     (hexcess : ∀ v r', w.Aggressing x v r' → w.EntitledToEnforce z v r' →
-      ¬ w.Proportionate f x v r') :
+      ¬ w.Proportionate f x v r') (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Intervene z x y r f) ∧ N.Perm (Act.Resist x z f) := by
   have h_res : N.Perm (Act.Resist x z f) :=
     H.body_resist x z f (Ne.symm hzx) fun ⟨v, r', hag, hent, hprop⟩ =>
       hexcess v r' hag hent hprop
   refine ⟨(N.deontic_duality _).mpr fun h_int => ?_, h_res⟩
-  exact H.compossible _ _ (InConflict.intervene_vs_resist z x y r f hzx) ⟨h_int, h_res⟩
+  exact H.compossible _ _ (InConflict.intervene_vs_resist z x y r f hzx)
+    (w.no_agreed_contest hnc) ⟨h_int, h_res⟩
 
 /-- THEOREM 6C (The victim's veto over defense): if the victim, while capable, declines,
     no one else may intervene on their behalf, with any force. -/
@@ -978,10 +1009,10 @@ theorem vetoed_defense (H : JurisdictionUPB N w) (z x y : Agent) (r : Resource)
     of the book's nursing home. -/
 theorem rescue_from_neglect (H : JurisdictionUPB N w) (z g c : Agent) (f : Force)
     (hzg : z ≠ g) (hneg : w.Neglects g c) (hinc : ¬ w.hist.Capable w.now c)
-    (hprop : w.Proportionate f g c (w.body c)) :
+    (hprop : w.Proportionate f g c (w.body c)) (hnc : ¬ w.Contest z g) :
     N.Perm (Act.Intervene z g c (w.body c) f) ∧ N.ObligRefrain (Act.Resist g z f) :=
   defense_of_others H z g c _ f hzg (Or.inr ⟨rfl, hneg⟩) (w.anyone_may_help_incapable hinc)
-    hprop
+    hprop hnc
 
 /-- THEOREM 13A (Rescue is always possible): whenever a guardian is neglecting a child in
     their custody, anyone has some permitted way to remove the child. -/
@@ -996,46 +1027,49 @@ theorem rescue_available (H : JurisdictionUPB N w) (z g c : Agent) (hzg : z ≠ 
     "more practically" would be better for them is no justification (the book's
     *Practicality*). -/
 theorem no_stopping_permitted_acts (H : JurisdictionUPB N w) (z : Agent)
-    (a : Act Agent Resource Force) (hz : z ≠ a.doer) (ha : N.Perm a) :
+    (a : Act Agent Resource Force) (hz : z ≠ a.doer) (ha : N.Perm a)
+    (hnc : ¬ w.Contest z a.doer) :
     N.ObligRefrain (Act.Stop z a) :=
   (N.deontic_duality _).mpr fun h_stop =>
-    H.compossible _ _ (InConflict.stop_vs_act z a hz) ⟨h_stop, ha⟩
+    H.compossible _ _ (InConflict.stop_vs_act z a hz) (w.no_agreed_contest hnc) ⟨h_stop, ha⟩
 
 /-- THEOREM 7A (No force against avoidable acts): no one may use force to stop another
     person's avoidable, non-invasive act, such as rudeness, lateness or lying. This is the
     line between ethics and aesthetics in the book's *Ethics, Aesthetics and
     Avoidability*. Derived from P4 and Theorem 7. -/
 theorem no_force_against_avoidable (H : JurisdictionUPB N w) (z x : Agent) (id : Nat)
-    (hzx : z ≠ x) : N.ObligRefrain (Act.Stop z (Act.AvoidableAct x id)) :=
-  no_stopping_permitted_acts H z _ hzx (H.avoidable_perm x id)
+    (hzx : z ≠ x) (hnc : ¬ w.Contest z x) :
+    N.ObligRefrain (Act.Stop z (Act.AvoidableAct x id)) :=
+  no_stopping_permitted_acts H z _ hzx (H.avoidable_perm x id) hnc
 
 /-- THEOREM 7B (No victimless-crime enforcement): no one may use force to stop people
     using their own body or property, for example taking drugs, whatever the law says.
     Derived from owners' use (P3a) and Theorem 7. Combined with Theorem 8, this applies to
     police and officials as to anyone else. -/
 theorem no_victimless_crime_enforcement (H : JurisdictionUPB N w) (z x : Agent)
-    (r : Resource) (hzx : z ≠ x) (hj : w.HasJurisdiction x r) (hl : ¬ w.Licensed x r) :
+    (r : Resource) (hzx : z ≠ x) (hj : w.HasJurisdiction x r) (hl : ¬ w.Licensed x r)
+    (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Stop z (Act.Use x r)) :=
-  no_stopping_permitted_acts H z _ hzx (H.owner_use x r hj hl)
+  no_stopping_permitted_acts H z _ hzx (H.owner_use x r hj hl) hnc
 
 /-- THEOREM 9 (Assault and murder): no one may use force against the body of someone who
     is not liable to that force, and the victim may resist. In particular no one may use
     any force, lethal or not, against a peaceful person. Derived from bodily resistance
     (P3d) and P1. -/
 theorem no_assault (H : JurisdictionUPB N w) (z x : Agent) (f : Force) (hzx : z ≠ x)
-    (hnl : ¬ w.Liable x z f) :
+    (hnl : ¬ w.Liable x z f) (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Strike z x f) ∧ N.Perm (Act.Resist x z f) := by
   have h_res := H.body_resist x z f (Ne.symm hzx) hnl
   refine ⟨(N.deontic_duality _).mpr fun h_strike => ?_, h_res⟩
-  exact H.compossible _ _ (InConflict.strike_vs_resist z x f hzx) ⟨h_strike, h_res⟩
+  exact H.compossible _ _ (InConflict.strike_vs_resist z x f hzx) (w.no_agreed_contest hnc)
+    ⟨h_strike, h_res⟩
 
 /-- THEOREM 9A (No assault or murder of peaceful people): Theorem 9 for someone who is
     not aggressing against anyone. -/
 theorem no_assault_on_peaceful (H : JurisdictionUPB N w) (z x : Agent) (f : Force)
-    (hzx : z ≠ x) (hpeace : ∀ v r, ¬ w.Aggressing x v r) :
+    (hzx : z ≠ x) (hpeace : ∀ v r, ¬ w.Aggressing x v r) (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Strike z x f) ∧ N.Perm (Act.Resist x z f) :=
-  no_assault H z x f hzx (not_liable_of_peaceful hpeace z f)
-
+  no_assault H z x f hzx (not_liable_of_peaceful hpeace z f) hnc
 /-- THEOREM 8 (No exemptions for roles, offices or majorities): let `Role` be any property
     of agents at all: holding an office, wearing a uniform, being in the majority of a
     vote. Everyone with that role is bound by the same prohibitions as everyone else:
@@ -1048,32 +1082,33 @@ theorem no_assault_on_peaceful (H : JurisdictionUPB N w) (z x : Agent) (f : Forc
     or "the majority": a claimed command is just another role, and grants nothing. -/
 theorem no_role_exemption (H : JurisdictionUPB N w) (Role : Agent → Prop) (z : Agent)
     (_ : Role z) :
-    (∀ y r, z ≠ y → w.Holds y r → w.HasJurisdiction y r →
+    (∀ y r, z ≠ y → w.Holds y r → w.HasJurisdiction y r → ¬ w.Contest z y →
       N.ObligRefrain (Act.Take z y r)) ∧
-    (∀ x f, z ≠ x → (∀ v r, ¬ w.Aggressing x v r) → N.ObligRefrain (Act.Strike z x f)) ∧
-    (∀ a : Act Agent Resource Force, z ≠ a.doer → N.Perm a →
+    (∀ x f, z ≠ x → (∀ v r, ¬ w.Aggressing x v r) → ¬ w.Contest z x →
+      N.ObligRefrain (Act.Strike z x f)) ∧
+    (∀ a : Act Agent Resource Force, z ≠ a.doer → N.Perm a → ¬ w.Contest z a.doer →
       N.ObligRefrain (Act.Stop z a)) :=
-  ⟨fun y r hzy hy hj => no_take_from_owner H z y r hzy hy hj,
-   fun x f hzx hpeace => (no_assault_on_peaceful H z x f hzx hpeace).1,
-   fun a hz ha => no_stopping_permitted_acts H z a hz ha⟩
+  ⟨fun y r hzy hy hj hnc => no_take_from_owner H z y r hzy hy hj hnc,
+   fun x f hzx hpeace hnc => (no_assault_on_peaceful H z x f hzx hpeace hnc).1,
+   fun a hz ha hnc => no_stopping_permitted_acts H z a hz ha hnc⟩
 
 /-- THEOREM 10 (Suicide and self-harm): no one may forcibly stop someone using their own
     body as they choose, including in ways that harm or end their own life. (The proviso
     is that they have not lent the use of their body to someone else.) -/
 theorem no_stopping_self_harm (H : JurisdictionUPB N w) (z x : Agent) (hzx : z ≠ x)
-    (hl : ¬ w.Licensed x (w.body x)) :
+    (hl : ¬ w.Licensed x (w.body x)) (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Stop z (Act.Use x (w.body x))) :=
-  no_victimless_crime_enforcement H z x _ hzx (w.self_sovereignty x) hl
+  no_victimless_crime_enforcement H z x _ hzx (w.self_sovereignty x) hl hnc
 
 /-- THEOREM 11 (Freedom of association): let `id` be the avoidable act of declining to
     associate with someone: refusing to trade with them, befriend them, employ them or
     attend their school. No one may forcibly stop that refusal, and no one may take
     control of a person's body to force them into association. -/
 theorem freedom_of_association (H : JurisdictionUPB N w) (z x : Agent) (id : Nat)
-    (hzx : z ≠ x) :
+    (hzx : z ≠ x) (hnc : ¬ w.Contest z x) :
     N.ObligRefrain (Act.Stop z (Act.AvoidableAct x id)) ∧
       N.ObligRefrain (Act.Take z x (w.body x)) :=
-  ⟨no_force_against_avoidable H z x id hzx, (bodily_non_aggression H z x hzx).1⟩
+  ⟨no_force_against_avoidable H z x id hzx hnc, (bodily_non_aggression H z x hzx hnc).1⟩
 
 /-- CULPABILITY: `x` is culpable for act `a` if `x` does `a`, `a` is forbidden, and `x` is
     capable of choice now. This separates judging the *act* (permitted or forbidden) from
@@ -1096,17 +1131,17 @@ theorem no_culpability_without_capacity {x : Agent} {a : Act Agent Resource Forc
 theorem incapable_aggressor_may_be_stopped (H : JurisdictionUPB N w) (z x y : Agent)
     (r : Resource) (f : Force) (hzx : z ≠ x) (hag : w.Aggressing x y r)
     (hent : w.EntitledToEnforce z y r) (hprop : w.Proportionate f x y r)
-    (_ : ¬ w.hist.Capable w.now x) :
+    (_ : ¬ w.hist.Capable w.now x) (hnc : ¬ w.Contest z x) :
     N.Perm (Act.Intervene z x y r f) ∧ N.ObligRefrain (Act.Resist x z f) :=
-  defense_of_others H z x y r f hzx hag hent hprop
+  defense_of_others H z x y r f hzx hag hent hprop hnc
 
 /-- THEOREM 12B (Those lacking capacity keep their rights): children, people in comas
     and others lacking capacity cannot be culpable, but they can be wronged. No one may
     take control of their body, and they keep title to it. -/
 theorem incapable_keep_rights (H : JurisdictionUPB N w) (x y : Agent) (hxy : x ≠ y)
-    (_ : ¬ w.hist.Capable w.now y) :
+    (_ : ¬ w.hist.Capable w.now y) (hnc : ¬ w.Contest x y) :
     N.ObligRefrain (Act.Take x y (w.body y)) ∧ w.HasJurisdiction y (w.body y) :=
-  ⟨(bodily_non_aggression H x y hxy).1, w.self_sovereignty y⟩
+  ⟨(bodily_non_aggression H x y hxy hnc).1, w.self_sovereignty y⟩
 
 /-- P1 RESTATED: "two conflicting acts are never both permitted" is equivalent to "at
     least one of them is forbidden", i.e. in every conflict someone must yield. -/
@@ -1128,8 +1163,8 @@ end
 /-! ## Consistency -/
 
 /-- The canonical norm system for these presuppositions. -/
-def JSystem {Agent Resource Force : Type} (w : World Agent Resource Force) :
-    NormSystem Agent Resource Force :=
+def JSystem {Agent Resource Force : Type} (w : World Agent Resource Force)
+    (boxing : Prop := False) : NormSystem Agent Resource Force :=
   NormSystem.ofPerm fun
     | .Use x r             => (w.HasJurisdiction x r ∧ ¬ w.Licensed x r) ∨
         (∃ o, w.HasJurisdiction o r ∧ x ≠ o ∧ w.Permits o x r)
@@ -1142,14 +1177,17 @@ def JSystem {Agent Resource Force : Type} (w : World Agent Resource Force) :
         w.Proportionate f x y r
     | .Resist x z f        => x ≠ z ∧ ¬ w.Liable x z f
     | .AvoidableAct _ _    => True
-    | .Strike _ _ _        => False
+    | .Strike z x f        => boxing ∧ z ≠ x ∧
+        w.AgreedContest (Act.Strike z x f) (Act.Resist x z f)
     | .Stop _ _            => False
 
-/-- THEOREM 5 (Consistency): for every world, and so for every interpretation of
-    "proportionate", `JSystem` satisfies every presupposition. -/
-theorem consistent {Agent Resource Force : Type} (w : World Agent Resource Force) :
-    JurisdictionUPB (JSystem w) w where
-  compossible a₁ a₂ h_conf := by
+/-- THEOREM 5 (Consistency): for every world, and so for every interpretation of the
+    undefined terms, `JSystem` satisfies every presupposition. This holds whether or not
+    `boxing` is switched on, i.e. whether strikes within an agreed contest are permitted
+    or forbidden. -/
+theorem consistent {Agent Resource Force : Type} (w : World Agent Resource Force)
+    (boxing : Prop := False) : JurisdictionUPB (JSystem w boxing) w where
+  compossible a₁ a₂ h_conf hnag := by
     intro ⟨h₁, h₂⟩
     cases h_conf with
     | use_vs_use x y r hxy =>
@@ -1191,7 +1229,7 @@ theorem consistent {Agent Resource Force : Type} (w : World Agent Resource Force
     | intervene_vs_resist z x y r f _ =>
       exact h₂.2 ⟨y, r, h₁.2.1, h₁.2.2.1, h₁.2.2.2⟩
     | strike_vs_resist _ _ _ _ =>
-      exact h₁
+      exact hnag h₁.2.2
     | stop_vs_act _ _ _ =>
       exact h₁
   owner_use _ _ hj hl := Or.inl ⟨hj, hl⟩
@@ -1254,6 +1292,8 @@ def assaultWorld : World Person Thing Nat where
   Permits _ _ _ := False
   Guardian _ _ := False
   Provides _ _ := True
+  Contest _ _ := False
+  InScope _ _ _ := False
   Proportionate f _ _ _ := f ≤ 1
   title_rule _ _ := ⟨fun h => ⟨rfl, h⟩, fun h => h.2⟩
   body_inalienable _ h := by cases h
@@ -1290,10 +1330,79 @@ theorem bystander_example :
   have hag : assaultWorld.Aggressing .assailant .victim (.body .victim) :=
     Or.inl ⟨⟨rfl, rfl, rfl⟩, by decide, Or.inl rfl, Or.inl rfl⟩
   obtain ⟨h1, h2⟩ := defense_of_others H .bystander .assailant .victim (.body .victim) 1
-    (by decide) hag (Or.inr fun ⟨h, _⟩ => h) (Nat.le_refl 1)
+    (by decide) hag (Or.inr fun ⟨h, _⟩ => h) (Nat.le_refl 1) id
   obtain ⟨h3, h4⟩ := excessive_force_forbidden H .bystander .assailant .victim
-    (.body .victim) 5 (by decide) fun _ _ _ _ (h : 5 ≤ 1) => absurd h (by decide)
+    (.body .victim) 5 (by decide) (fun _ _ _ _ (h : 5 ≤ 1) => absurd h (by decide)) id
   exact ⟨h1, h2, h3, h4⟩
+
+/-! ## Mutual combat -/
+
+inductive Boxer where
+  | red | blue
+  deriving DecidableEq
+
+/-- Two boxers in a match they have both agreed to, with every move within its scope.
+    Each owns only their own body. No one is aggressing. -/
+def boxingWorld : World Boxer Boxer Nat where
+  body := id
+  body_injective _ _ h := h
+  HasJurisdiction p r := r = p
+  Holds p r := r = p
+  hist :=
+    { FirstAt := fun t p r => t = 0 ∧ r = p
+      GaveAt := fun _ _ _ _ => False
+      DeceivedAt := fun _ _ _ _ => False
+      CoercedAt := fun _ _ _ _ => False
+      TookAt := fun _ _ _ _ => False
+      DestroyedAt := fun _ _ _ => False
+      InjuredAt := fun _ _ _ => False
+      AgreedAt := fun _ _ _ => False
+      AgreementDeceivedAt := fun _ _ _ => False
+      AgreementCoercedAt := fun _ _ _ => False
+      Outstanding := fun _ _ _ => False
+      CompensatesAt := fun _ _ _ _ => False
+      Alienable := fun _ => False
+      Capable := fun _ _ => True }
+  now := 0
+  Attempting _ _ _ := False
+  Declines _ _ := False
+  Permits _ _ _ := False
+  Guardian _ _ := False
+  Provides _ _ := True
+  Contest _ _ := True
+  InScope _ _ _ := True
+  Proportionate _ _ _ _ := True
+  title_rule _ _ := ⟨fun h => ⟨rfl, h⟩, fun h => h.2⟩
+  body_inalienable _ h := h
+  holds_body _ := rfl
+  body_first _ := ⟨0, Nat.le_refl 0, rfl, rfl⟩
+  first_unique _ _ _ _ _ hx hy := ⟨hx.2.symm.trans hy.2, hx.1.trans hy.1.symm⟩
+  gave_unique _ _ _ _ _ h _ := h.elim
+  compensation_unique _ _ _ _ _ h _ := h.elim
+  wrong_creates_debt _ _ _ hw := by
+    rcases hw.2 with ⟨_, h, _⟩ | ⟨_, h, _⟩ | h <;> exact h.elim
+  debt_requires_source _ _ _ h := h.elim
+  paid_stays_paid _ _ _ _ _ _ _ _ h := h
+  first_in_time _ _ _ _ _ h _ := h.elim
+  permits_unique _ _ _ _ h _ := h.elim
+  held_has_first p _ hy := ⟨0, Nat.le_refl 0, p, rfl, hy⟩
+  proportionate_exists _ _ _ _ := ⟨0, trivial⟩
+
+/-- THEOREM 14 (Mutual combat is left open): in an agreed boxing match, the premises
+    neither forbid nor require permitting the punches. With strikes in agreed contests
+    permitted, every premise holds, and both the punch and the block are permitted at once,
+    even though they physically conflict. With such strikes forbidden, every premise
+    also holds. So narrowed compossibility no longer rules out consensual fighting, and no
+    premise rules it in. -/
+theorem mutual_combat_undetermined :
+    JurisdictionUPB (JSystem boxingWorld True) boxingWorld ∧
+    (JSystem boxingWorld True).Perm (Act.Strike .red .blue 1) ∧
+    (JSystem boxingWorld True).Perm (Act.Resist .blue .red 1) ∧
+    JurisdictionUPB (JSystem boxingWorld False) boxingWorld ∧
+    ¬ (JSystem boxingWorld False).Perm (Act.Strike .red .blue 1) := by
+  refine ⟨consistent _ True, ⟨trivial, by decide, trivial, trivial, trivial, trivial, trivial⟩,
+    ⟨by decide, ?_⟩, consistent _ False, fun h => h.1⟩
+  rintro ⟨_, _, (⟨h, _⟩ | ⟨_, _, h, _⟩), _⟩ <;> exact h
 
 end UPB2
 
@@ -1354,3 +1463,4 @@ end UPB2
 #print axioms UPB2.compossible_iff_decisive
 #print axioms UPB2.consistent
 #print axioms UPB2.bystander_example
+#print axioms UPB2.mutual_combat_undetermined

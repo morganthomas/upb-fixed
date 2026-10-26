@@ -52,7 +52,8 @@ It also records the present situation:
 - which owners currently permit whom to use which of their things (`Permits`), as in lending, renting or inviting a guest;
 - who is currently trying to take what from whom (`Attempting`);
 - which owners have declined help from others for which of their things (`Declines`);
-- who currently has custody of which dependents (`Guardian`), and whether they are providing adequate care (`Provides`).
+- who currently has custody of which dependents (`Guardian`), and whether they are providing adequate care (`Provides`);
+- who is currently engaged in a contest with whom that both agreed to (`Contest`), and which acts are within its scope (`InScope`).
 
 ## Undefined terms
 
@@ -66,6 +67,7 @@ It also records the present situation:
 - **Compensates** (`CompensatesAt`). Which of a debtor's possessions are designated as payment at a given time. Also undefined. It could reflect market value, the victim's subjective loss, a multiple of the loss, the contract's terms, or anything else. Assumed about it: a single thing pays only one creditor at a time, and the first-in-time rule above.
 
 - **Guardian** (`Guardian`) and **provides adequate care** (`Provides`). Who has custody of a dependent, and whether they are caring for them adequately. Both are deliberately left undefined. The model takes no side on how guardianship arises (birth, adoption or otherwise) or on what counts as adequate care.
+- **Contest** (`Contest`) and **in scope** (`InScope`). Whether two people are engaged in a contest they both agreed to, such as a boxing match, a game or a sparring session, and which acts are moves within it. Agreeing to box isn't agreeing to be stabbed. Both are deliberately left undefined. Nothing is assumed about them.
 - **Capable** (`Capable`). Whether someone is able to choose at a given time: not asleep, in a coma, too young, or otherwise lacking the capacity for responsible choice. Deliberately left undefined, so the model takes no side on ages, thresholds or degrees. Nothing is assumed about it.
 
 The model does not require **necessity** (using no more force than needed). Proportionate force is permitted even if less force would have worked.
@@ -83,6 +85,7 @@ These are not premises. They fix what the premises are about.
   - they are trying to take something from its owner while the owner is holding it; or
   - they are neglecting a dependent in their custody. The book's analogy is a husband who locks his wife in the basement and lets her starve.
 - **Entitled to enforce** (`EntitledToEnforce`). You may enforce someone's claim if you are that person, or if they haven't declined help from others *while having the capacity to choose*. Someone lacking capacity can't veto help, and no guardian can veto on their behalf.
+- **Agreed contest** (`AgreedContest`). Two acts are moves in an agreed contest when their doers are in a contest they both agreed to, both acts are within its scope, and both doers currently have the capacity to choose. Consent to a contest requires capacity, like all consent.
 - **Culpable** (`Culpable`). Someone is culpable for an act if they do it, it is forbidden, and they currently have the capacity to choose. This separates judging an *act* (permitted or forbidden) from judging the *person* (to blame or not).
 - **Liable** (`Liable`). An aggressor is liable to a given use of force from a given person when that person is entitled to enforce the victim's claim and the force is proportionate to stopping the aggression.
 - **Conflict** (`InConflict`). Two acts conflict when they physically can't both happen. Conflict is a matter of physical fact; who owns what plays no part in it.
@@ -95,7 +98,7 @@ These are not premises. They fix what the premises are about.
 
 These are the fields of `JurisdictionUPB`. They carry the argument's moral content.
 
-- **P1, Compossibility** (`compossible`). In every physical conflict, at least one party is obliged to yield. In other words, two acts that physically conflict are never both permitted. Lean proves the two phrasings equivalent (`compossible_iff_decisive`). This is the book's point that a set of norms exists to settle conflicts, not to leave everyone "pointing guns at each other's faces."
+- **P1, Compossibility** (`compossible`). In every physical conflict that the parties haven't agreed to, at least one party is obliged to yield. In other words, two acts that physically conflict are never both permitted, *unless* they are moves in a contest both parties agreed to. Lean proves the two phrasings equivalent (`compossible_iff_decisive`). This is the book's point that a set of norms exists to settle conflicts, not to leave everyone "pointing guns at each other's faces." Parties who have agreed to a contest, such as a boxing match or a game, have already settled theirs. P1 therefore doesn't forbid mutual combat, though no premise permits it either.
 - **P3a, Use** (`owner_use`). You may use what you own, unless you have currently lent it to someone else.
 - **P3b, Defense** (`owner_defend`). You may resist anyone's attempt to take what you own, including your body.
 - **P3d, Bodily resistance, with liability** (`body_resist`). You may resist force used against your body, with one exception: while you are aggressing, you may not count on resisting *proportionate* force from someone entitled to stop you. Against excessive force, an aggressor keeps the right to resist.
@@ -113,6 +116,8 @@ The numbering keeps the labels used throughout the discussion. There is no P2: t
 ## What follows from them
 
 From these premises, Lean verifies the following. `Conclusions.md` gives each result in full, with its theorem name and what it rests on.
+
+The prohibitions below apply between people who aren't in an agreed contest with each other, since that is where P1 applies. Within an agreed contest, the premises leave the moves undetermined.
 
 **Title**
 - Every person owns their own body, no thing has two owners, and anyone holding something nobody else owns is its owner. Even apart from the physical facts, P1 and P3a rule out two people owning the same thing.
@@ -144,6 +149,9 @@ From these premises, Lean verifies the following. `Conclusions.md` gives each re
 - Consent requires capacity. Someone lacking the capacity to choose, such as a child, can make neither a voluntary transfer nor a valid contract, and can't veto help.
 - No one is culpable for what they do while lacking capacity, but they may still be stopped with proportionate force, still owe restitution for harms, and keep all their rights.
 - A guardian must provide or relinquish. Anyone may use proportionate force to remove a dependent from a guardian who keeps custody without providing care, the guardian may not resist, and neither the dependent nor the guardian can veto the rescue.
+
+**Mutual combat**
+- In an agreed contest, such as a boxing match, the premises neither forbid nor require permitting the moves. Both a punch and the block against it can be permitted at once.
 
 **No exemptions and consistency**
 - No office, uniform, majority vote or claimed authority creates an exemption from any of these prohibitions.

@@ -6,6 +6,8 @@ Each conclusion gives its theorem number and Lean name, and says what it rests o
 
 Throughout, "may" means *is permitted to*, and "may not" means *is obliged to refrain from*.
 
+Most prohibitions below come from compossibility (P1), which applies only to conflicts the parties haven't agreed to. So each holds **between people not engaged in an agreed contest**, such as a boxing match or a game. In Lean, each such theorem carries a hypothesis saying the two parties aren't in one. What happens within an agreed contest is covered under *Mutual combat* below.
+
 ## Title
 
 These conclusions are about who owns what. They used to be premises. Now they follow from one principle, that title comes only from first possession or from an owner's voluntary transfer (P0), together with the premise that bodies can't be transferred (P0b) and physical facts.
@@ -240,6 +242,13 @@ These results give the book's conclusion that parents must feed their children o
 
 - *Derived* from licenses (P3e), applied to the body.
 
+## Mutual combat
+
+**In an agreed contest, the premises neither forbid nor require permitting the moves** (Theorem 14, `mutual_combat_undetermined`). In a boxing match both boxers agreed to, a punch and the block against it physically conflict. P1 doesn't settle which must yield, because the boxers have already agreed to the contest. Lean exhibits a match where the premises all hold and both the punch and the block are permitted at once. It also exhibits one where the premises all hold and punches are forbidden.
+
+- *Derived*: P1 applies only to conflicts not agreed to, and no premise says what is permitted within a contest. This answers the objection, raised in the original discussion, that symmetric permission to fight "is not a formal logical contradiction."
+- What counts as a contest, and which acts fall within its scope, are undefined terms. Agreeing to box isn't agreeing to be stabbed, and agreement requires capacity.
+
 ## Forcibly stopping what others may do
 
 **No one may use force to stop someone else from doing what they are permitted to do** (Theorem 7, `no_stopping_permitted_acts`).
@@ -313,6 +322,7 @@ Taken together, the theory concludes the following:
 - **Freedom of association.** No one may force anyone into association or stop them declining it.
 - **No consent by proxy.** No one can consent, contract or vote away your property on your behalf.
 - **No exemptions.** No office, uniform or majority vote creates an exemption from any of this.
+- **Mutual combat.** Within a contest both parties agreed to, such as a boxing match, the premises neither forbid nor require permitting the moves.
 - **Owner's rights.** Owners may use, defend and recover what they own.
 - **Defense and recovery by others.** Anyone may defend victims and recover stolen property on their behalf, unless the victim or owner declines. Victims of fraud or duress may take back what they handed over.
 - **Restitution.** Whoever takes, destroys or damages what someone owns, or injures them, owes compensation from their own property, under strict liability, until the debt is paid off. The victim owns what is designated as compensation and may collect it. Earlier victims come first, debts don't lapse, and no one's body can be taken.

@@ -50,6 +50,7 @@ Each of these is now a theorem or a stated consequence. Details are in the named
 | E11 | A self-written deed creates no title | *Title* |
 | F3 | Contracts, under the title-transfer theory | *Contracts* |
 | F4 | Moral capacity and culpability | *Moral capacity* |
+| — | Mutual combat isn't forbidden (P1 narrowed to conflicts not agreed to; raised after the book review) | *Mutual combat* |
 
 Choices made while completing these items, and what they leave out, are recorded in `Limitations.md`.
 
