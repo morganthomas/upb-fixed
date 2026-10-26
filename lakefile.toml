@@ -1,0 +1,15 @@
+name = "upb"
+defaultTargets = ["UPBJurisdiction", "UPBProof", "UPBSymmetry"]
+
+# The current theory.
+[[lean_lib]]
+name = "UPBJurisdiction"
+
+# Earlier stages, kept for the record. See archive/README.md.
+[[lean_lib]]
+name = "UPBProof"
+srcDir = "archive"
+
+[[lean_lib]]
+name = "UPBSymmetry"
+srcDir = "archive"

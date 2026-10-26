@@ -1,0 +1,9 @@
+# Lean / Lake build output
+.lake/
+
+# The book is someone else's copyrighted work: keep local copies out of the repository.
+Universally_Preferable_Behaviour_UPB_by_Stefan_Molyneux.md
+Universally_Preferable_Behaviour_UPB_by_Stefan_Molyneux_PDF.pdf
+
+# The Discord conversation includes other people's messages: keep it local.
+UPB fixed.md

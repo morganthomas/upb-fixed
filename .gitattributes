@@ -1,0 +1,3 @@
+# Keep Unix-style line endings in the working copy on every platform.
+* text=auto eol=lf
+*.pdf binary
